@@ -7,6 +7,8 @@ import string
 from typing import List, Tuple, Dict
 import re
 import nltk
+from datasets import Dataset
+
 
 # Download required NLTK data
 def setup_nltk():
@@ -42,9 +44,20 @@ def build_pos_tag_dict(dataset) -> Dict[str, int]:
                     pos_tag_dict[tag] = len(pos_tag_dict)
     return pos_tag_dict
 
-def load_and_preprocess_data():
+def load_and_preprocess_data(dataset_name):
     """Load and preprocess the CoNLL-2003 dataset."""
-    dataset = load_dataset("eriktks/conll2003", trust_remote_code=True)
+    dataset = load_dataset(dataset_name, trust_remote_code=True)
+    
+    X_all = Dataset.from_dict(
+        {   
+            'id': dataset['train']['id'] + dataset['test']['id'],
+            'tokens': dataset['train']['tokens'] + dataset['test']['tokens'],
+            'pos_tags': dataset['train']['pos_tags'] + dataset['test']['pos_tags'],
+            'chunk_tags': dataset['train']['chunk_tags'] + dataset['test']['chunk_tags'],
+            'ner_tags': dataset['train']['ner_tags'] + dataset['test']['ner_tags'],
+        }
+    )
+    dataset['all'] = X_all 
     return dataset
 
 def convert_to_binary_labels(ner_tags: List[int]) -> List[int]:
@@ -134,8 +147,8 @@ def prepare_dataset(dataset_split, pos_tag_dict: Dict[str, int]):
 def train_and_evaluate():
     """Train SVM model and evaluate its performance."""
     # Load dataset
-    dataset = load_and_preprocess_data()
-    
+    dataset = load_and_preprocess_data("eriktks/conll2003")
+
     # Build POS tag dictionary from entire dataset
     print("Building POS tag dictionary...")
     pos_tag_dict = build_pos_tag_dict(dataset)
@@ -145,7 +158,7 @@ def train_and_evaluate():
     print("Preparing training data...")
     X_train, y_train = prepare_dataset(dataset['train'], pos_tag_dict)
     print("Preparing test data...")
-    X_test, y_test = prepare_dataset(dataset['test'], pos_tag_dict)
+    X_test, y_test = prepare_dataset(dataset['all'], pos_tag_dict)
     
     # Scale features
     print("Scaling features...")
@@ -191,6 +204,10 @@ def predict_sentence(sentence: str, svm_model, scaler, pos_tag_dict) -> List[Tup
 
 results = train_and_evaluate()
 
+print(f"Precision: {results['precision']:.2f}")
+print(f"Recall: {results['recall']:.2f}")
+print(f"F1 Score: {results['f1_score']:.2f}")
+
 test_sentence = "Washington DC is the capital of United States of America"
 predictions = predict_sentence(
     test_sentence, 
@@ -201,7 +218,4 @@ predictions = predict_sentence(
     
 formatted_output = " ".join([f"{token}_{pred}" for token, pred in predictions])
 print(f"\nInput: {test_sentence}")
-print(f"Output: {formatted_output}")\
-
-
-    
+print(f"Output: {formatted_output}")
